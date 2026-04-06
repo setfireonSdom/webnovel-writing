@@ -76,6 +76,11 @@ def main():
         default="core",
         help="审查深度",
     )
+    review_parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="自动修复 critical/high 问题并覆盖原文件",
+    )
     
     # query 命令
     query_parser = subparsers.add_parser("query", help="查询信息")
@@ -257,6 +262,13 @@ def cmd_plan(args, config):
             
             if result['status'] == 'success':
                 console.print(f"\n[bold green]✓ 自动生成完成！共生成 {result['total_chapters']} 章[/bold green]")
+                # 更新 state.json 的总章节数
+                state = state_manager.load_state()
+                state.progress["total_chapters"] = max(
+                    state.progress.get("total_chapters", 0),
+                    result['total_chapters']
+                )
+                state_manager.save_state(state)
             elif result['status'] == 'already_complete':
                 console.print(f"\n[bold green]✓ 细纲已存在，无需重复生成[/bold green]")
             else:
@@ -281,6 +293,13 @@ def cmd_plan(args, config):
                 num_chapters=args.chapters,
             ))
             console.print(f"\n[bold green]大纲规划完成！[/bold green]")
+            # 更新 state.json 的总章节数
+            state = state_manager.load_state()
+            state.progress["total_chapters"] = max(
+                state.progress.get("total_chapters", 0),
+                result.get("num_chapters", args.chapters)
+            )
+            state_manager.save_state(state)
         except Exception as e:
             console.print(f"\n[bold red]大纲规划失败: {e}[/bold red]")
             import sys
@@ -425,23 +444,24 @@ def _run_batch_write(start: int, end: int, mode: str, config: Dict[str, Any]):
 def cmd_review(args, config):
     """审查章节"""
     console.print(f"[bold]审查章节:[/bold] 第 {args.chapter} 章 (深度: {args.depth})\n")
-    
+
     # 创建 LLM 实例
     llm = create_llm(config.get("llm", {}))
-    
+
     # 创建工作流管理器
     workflow = WorkflowManager(
         llm=llm,
         config=config,
     )
-    
+
     # 执行审查
     import asyncio
     result = asyncio.run(workflow.review_chapter(
         chapter_num=args.chapter,
         depth=args.depth,
+        auto_fix=getattr(args, 'fix', False),
     ))
-    
+
     console.print(result.to_rich_table())
 
 

@@ -30,7 +30,7 @@ OUTLINE_CHECK_PROMPT = """
 ## ⚠️ 重要约束
 **第 1 章到第 {last_written_chapter} 章已经写好了正文！**
 - **绝对禁止修改已写章节（1-{last_written_chapter}章）的大纲内容！**
-- 你的任务是检查和修复**未写章节（{last_written_chapter+1}章及以后）的大纲**。
+- 你的任务是检查和修复**未写章节（第 {{next_unwritten}} 章及以后）的大纲**。
 - 检查后续大纲时，必须以“已生成的正文内容”作为剧情起点，确保后续剧情和前面正文完美衔接。
 
 ## 已生成的正文内容（作为历史依据，不可更改）
@@ -105,6 +105,7 @@ class OutlineChecker:
             power_system=power_system,
             volume_num=volume_num,
             last_written_chapter=last_written,
+            next_unwritten=last_written + 1,
             written_chapters_summary=written_chapters_summary,
             outline_json=json.dumps(outline_data, ensure_ascii=False, indent=2)
         )

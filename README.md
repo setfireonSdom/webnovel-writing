@@ -245,6 +245,7 @@ cat 正文/ch0002.md
 # 审查第3章
 novel-writer review --chapter 3 --depth core    # 快速审查
 novel-writer review --chapter 3 --depth full    # 深度审查
+novel-writer review --chapter 3 --depth core --fix  # 审查 + 自动修复 critical/high 问题并覆盖原文
 
 # 查看审查结果
 novel-writer query --type review
@@ -321,6 +322,16 @@ novel-writer resume
 # 系统会显示中断的任务，选择 continue（继续）/ restart（重头来）/ cancel（取消）
 ```
 
+### 可视化面板
+
+```bash
+novel-writer dashboard              # 默认 127.0.0.1:8765
+novel-writer dashboard --port 9000  # 自定义端口
+novel-writer dashboard --reload     # 开发热重载
+```
+
+打开浏览器访问 http://127.0.0.1:8765 即可查看项目进度、角色状态、审查记录等数据。当前面板只读，不支持编辑。
+
 ---
 
 ## 命令参考
@@ -333,7 +344,7 @@ novel-writer resume
 | `check-outline` | 检查并优化细纲 | `--volume` | 无 | `novel-writer check-outline --volume 1` |
 | `write` | 写作章节 | `--chapter` 或 `--start`+`--end` | `--mode` | `novel-writer write --chapter 1 --mode standard` |
 | `write` (批量) | 批量写作 | `--start`, `--end` | `--mode` | `novel-writer write --start 1 --end 10 --mode fast` |
-| `review` | 审查章节 | `--chapter` | `--depth` | `novel-writer review --chapter 5 --depth full` |
+| `review` | 审查章节 | `--chapter` | `--depth`, `--fix` | `novel-writer review --chapter 5 --depth core --fix` |
 | `query` | 查询信息 | `--type` | `--name` | `novel-writer query --type character --name "张三"` |
 | `resume` | 恢复中断任务 | 无 | 无 | `novel-writer resume` |
 | `dashboard` | 启动 Web 面板 | 无 | `--host`, `--port`, `--reload` | `novel-writer dashboard --port 8765` |

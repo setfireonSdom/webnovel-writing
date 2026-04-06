@@ -13,7 +13,7 @@ from rich.console import Console
 
 from ..llm.base import BaseLLM
 from ..data.state_manager import StateManager
-from ..data.schemas import ChapterResult, ReviewReport, WorkflowState
+from ..data.schemas import ChapterResult, ReviewReport, ReviewIssue, Severity
 from ..data.plot_thread_tracker import PlotThreadTracker
 from ..data.long_term_memory import LongTermMemory
 from ..utils.file_ops import (
@@ -1057,6 +1057,7 @@ class WorkflowManager:
         self,
         chapter_num: int,
         depth: str = "core",
+        auto_fix: bool = False,
     ) -> ReviewReport:
         """审查章节质量
 
@@ -1147,6 +1148,25 @@ class WorkflowManager:
             sev = issue.severity if hasattr(issue, 'severity') else issue.get('severity', 'medium')
             severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
+        # 将 Issue dataclass 转换为 ReviewIssue Pydantic 模型
+        converted_issues = []
+        for issue in all_issues:
+            if isinstance(issue, ReviewIssue):
+                converted_issues.append(issue)
+            elif hasattr(issue, 'severity'):
+                # Issue dataclass（来自检查器）
+                converted_issues.append(ReviewIssue(
+                    id=issue.id,
+                    severity=issue.severity if isinstance(issue.severity, Severity) else Severity(issue.severity),
+                    category=issue.category,
+                    description=issue.description,
+                    location=issue.location or "",
+                    suggestion=issue.suggestion or "",
+                ))
+            else:
+                # dict（理论上不会走到这里）
+                converted_issues.append(ReviewIssue(**issue))
+
         # 判断是否通过
         has_critical = severity_counts["critical"] > 0
         has_multiple_high = severity_counts["high"] >= 3
@@ -1171,12 +1191,26 @@ class WorkflowManager:
             pass_=pass_,
             dimension_scores=dimension_scores,
             severity_counts=severity_counts,
-            issues=all_issues,
+            issues=converted_issues,
             summary="\n".join(summary_lines),
         )
 
         # 保存审查检查点
         self.state_manager.add_review_checkpoint(chapter_num, overall_score, pass_)
+
+        # 如果有 high/critical 问题且用户要求修复，自动修复
+        if auto_fix:
+            critical_high = [i for i in converted_issues if i.severity in (Severity.CRITICAL, Severity.HIGH)]
+            if critical_high:
+                console.print(f"[yellow]发现 {len(critical_high)} 个 critical/high 问题，自动修复中...[/yellow]")
+                fixed_content = await self._step4_polish(chapter_num, chapter_content, {
+                    "issues": converted_issues,
+                })
+                # 覆盖原文件
+                write_text_file(chapter_path, fixed_content)
+                console.print(f"[green]✓ 已修复并覆盖 {chapter_path}（{len(fixed_content)} 字）[/green]")
+            else:
+                console.print("[green]无 critical/high 问题，跳过自动修复[/green]")
 
         console.print(f"[bold green]审查完成，总分: {report.overall_score}[/bold green]\n")
         return report
