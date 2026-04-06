@@ -209,6 +209,9 @@ class WorkflowManager:
         # 初始化长期记忆与剧情线追踪
         self.plot_threads = PlotThreadTracker(self.project_root)
         self.long_term_mem = LongTermMemory(self.project_root)
+
+        # 后台任务引用（防止 fire-and-forget 被 GC）
+        self._background_tasks: list = []
     
     async def write_chapter(
         self,
@@ -278,9 +281,24 @@ class WorkflowManager:
                     final_content = await self._step2b_style(draft_content)
                     console.print(f"[green]✓ 完成（{len(final_content)} 字）[/green]")
 
+                # Step 2.3: 状态机校验（代码强制规则：重伤不能战斗、灵力不足不能放大招等）
+                state_machine_violations = None
+                if mode != "minimal" and self.state_machine.entities:
+                    console.print("[cyan]Step 2.3/6: 状态机校验（检查重伤战斗、灵力不足放大招等）...[/cyan]")
+                    state_machine_result = await self.state_machine.validate_chapter_content(
+                        chapter_num=chapter_num,
+                        text_content=final_content,
+                        llm=self.llm,
+                    )
+                    if state_machine_result["valid"]:
+                        console.print("[green]✓ 状态机校验通过[/green]")
+                    else:
+                        state_machine_violations = state_machine_result
+                        console.print(f"[yellow]⚠ 发现 {len(state_machine_violations['violations'])} 个状态违规[/yellow]")
+
                 # Step 2.4: 性别代词扫描（快速正则检查，不依赖LLM）
                 gender_issues = self._step2_4_gender_pronoun_scan(chapter_num, final_content)
-                
+
                 # Step 2.5: Logic Checker (防智障机制)
                 # minimal 模式也跳过逻辑审查
                 if mode == "minimal":
@@ -289,40 +307,50 @@ class WorkflowManager:
 
                 console.print("[cyan]Step 2.5/6: 逻辑审查（检查变性、境界倒退等）...[/cyan]")
                 check_result = await self.logic_checker.check(chapter_num, final_content)
-                
-                # 合并性别扫描结果到逻辑检查结果
+
+                # 合并状态机违规、性别扫描结果到逻辑检查结果
+                failure_reasons = []
+
+                # 1. 状态机违规
+                if state_machine_violations:
+                    failure_reasons.append(state_machine_violations["error_summary"])
+
+                # 2. 性别扫描问题
                 if gender_issues:
                     gender_error_msg = self.gender_scanner.get_error_message(gender_issues)
-                    if check_result["success"]:
-                        # 逻辑检查通过了，但性别扫描发现问题
-                        check_result = {
-                            "success": False,
-                            "reason": gender_error_msg,
-                            "correct_value": "请根据角色状态面板中的性别正确使用代词（男=他，女=她）",
-                            "error_type": "gender",
-                        }
-                    else:
-                        # 两者都失败，合并错误信息
-                        check_result["reason"] += "\n" + gender_error_msg
+                    failure_reasons.append(gender_error_msg)
 
-                if check_result["success"]:
+                # 3. 逻辑检查失败
+                if not check_result["success"]:
+                    failure_reasons.append(check_result["reason"])
+
+                if failure_reasons:
+                    # 有至少一项失败
+                    check_result = {
+                        "success": False,
+                        "reason": "\n\n".join(failure_reasons),
+                        "correct_value": state_machine_violations.get("correct_value", "") if state_machine_violations else (check_result.get("correct_value", "")),
+                        "error_type": state_machine_violations.get("error_type", "") if state_machine_violations else (check_result.get("error_type", "unknown")),
+                    }
+                else:
+                    # 全部通过
                     console.print("[green]✓ 逻辑审查通过[/green]\n")
                     break
-                else:
-                    retry_count += 1
-                    if retry_count > max_retries:
-                        console.print(f"[bold red]✗ 逻辑审查连续 {max_retries + 1} 次失败，放弃生成[/bold red]")
-                        raise ValueError(f"逻辑审查未通过: {check_result['reason']}")
-                    
-                    console.print(f"[yellow]⚠ 逻辑审查失败: {check_result['reason']}[/yellow]")
-                    console.print("[yellow]正在注入错误反馈并要求重写...[/yellow]\n")
 
-                    # 【关键修复】注入明确的正确值反馈，而不是模糊的"请确保符合设定"
-                    correct_value_info = ""
-                    if check_result.get('correct_value'):
-                        correct_value_info = f"\n正确值: {check_result['correct_value']}"
-                    
-                    error_feedback = f"""
+                retry_count += 1
+                if retry_count > max_retries:
+                    console.print(f"[bold red]✗ 逻辑审查连续 {max_retries + 1} 次失败，放弃生成[/bold red]")
+                    raise ValueError(f"逻辑审查未通过: {check_result['reason']}")
+
+                console.print(f"[yellow]⚠ 逻辑审查失败: {check_result['reason']}[/yellow]")
+                console.print("[yellow]正在注入错误反馈并要求重写...[/yellow]\n")
+
+                # 【关键修复】注入明确的正确值反馈，而不是模糊的"请确保符合设定"
+                correct_value_info = ""
+                if check_result.get('correct_value'):
+                    correct_value_info = f"\n正确值: {check_result['correct_value']}"
+
+                error_feedback = f"""
 【严重逻辑错误警告】你上一稿的内容存在以下逻辑硬伤，必须修正！
 错误类型: {check_result.get('error_type', 'unknown')}
 错误详情: {check_result['reason']}{correct_value_info}
@@ -335,8 +363,8 @@ class WorkflowManager:
 
 请立即修正！
 """
-                    context_result['writing_prompt'] += "\n\n" + error_feedback
-                    context_info['character_states'] += f"\n\n[系统警告]: 上文中出现严重逻辑错误 - {check_result['reason']}{correct_value_info}"
+                context_result['writing_prompt'] += "\n\n" + error_feedback
+                context_info['character_states'] += f"\n\n[系统警告]: 上文中出现严重逻辑错误 - {check_result['reason']}{correct_value_info}"
 
             # Step 3: 并行六维审查 (fast/minimal 模式跳过)
             if mode == "standard":
@@ -885,14 +913,14 @@ class WorkflowManager:
         
         # 更新状态机（新增 - 从文本中提取状态变化）
         try:
-            self._update_state_machine_from_chapter(chapter_num, chapter_content)
+            await self._update_state_machine_from_chapter(chapter_num, chapter_content)
         except Exception as e:
             logger.warning(f"状态机更新失败: {e}")
         
         # 更新因果链（新增 - 自动提取新债/还债/伏笔）
         try:
-            causal_results = self.causal_chain.analyze_chapter_for_debts_and_foreshadowings(
-                chapter_num, 
+            causal_results = await self.causal_chain.analyze_chapter_for_debts_and_foreshadowings(
+                chapter_num,
                 chapter_content,
                 llm=self.llm
             )
@@ -903,16 +931,19 @@ class WorkflowManager:
         except Exception as e:
             logger.warning(f"因果链更新失败: {e}")
         
-        # 自动提取世界观规则（异步，不阻塞）
+        # 自动提取世界观规则（后台任务，不阻塞主流程）
         try:
             import asyncio
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self.world_rules_manager.auto_extract_rules(
-                    self.llm, 
-                    chapter_num, 
+                    self.llm,
+                    chapter_num,
                     chapter_content
                 )
             )
+            # 保存引用防止被 GC，添加完成回调以清理
+            self._background_tasks.append(task)
+            task.add_done_callback(lambda t: self._background_tasks.remove(t) if t in self._background_tasks else None)
         except Exception as e:
             logger.warning(f"自动提取世界观规则失败: {e}")
         
@@ -922,7 +953,7 @@ class WorkflowManager:
         except Exception as e:
             logger.warning(f"更新角色弧光失败: {e}")
     
-    def _update_state_machine_from_chapter(self, chapter_num: int, chapter_content: str):
+    async def _update_state_machine_from_chapter(self, chapter_num: int, chapter_content: str):
         """从章节内容更新状态机"""
         # 提取主要角色
         state = self.state_manager.load_state()
@@ -949,7 +980,7 @@ class WorkflowManager:
 
             # 【关键修复】激活 LLM 提取状态变化
             try:
-                self.state_machine.update_state_from_text(
+                await self.state_machine.update_state_from_text(
                     entity_name=protagonist_name,
                     chapter_num=chapter_num,
                     text_content=chapter_content,
@@ -957,10 +988,10 @@ class WorkflowManager:
                 )
             except Exception as e:
                 logger.warning(f"状态机更新失败: {e}")
-        
+
         # 更新其他活跃角色
         for cs in state.character_states:
-            if cs.name != protagonist_name and cs.status == "active":
+            if cs.name != protagonist_name:
                 if not self.state_machine.get_state(cs.name):
                     self.state_machine.init_entity(
                         name=cs.name,
@@ -968,7 +999,7 @@ class WorkflowManager:
                         location=""
                     )
                 try:
-                    self.state_machine.update_state_from_text(
+                    await self.state_machine.update_state_from_text(
                         entity_name=cs.name,
                         chapter_num=chapter_num,
                         text_content=chapter_content,
@@ -1028,40 +1059,124 @@ class WorkflowManager:
         depth: str = "core",
     ) -> ReviewReport:
         """审查章节质量
-        
+
         Args:
             chapter_num: 章节号
             depth: 审查深度 (core | full)
-        
+
         Returns:
             ReviewReport: 审查报告
         """
         console.print(f"\n[bold blue]开始审查第 {chapter_num} 章[/bold blue] (深度: {depth})\n")
-        
+
         # 读取章节内容
         chapter_path = chapter_file_path(self.project_root, chapter_num)
         if not chapter_path.exists():
             raise FileNotFoundError(f"章节文件不存在: {chapter_path}")
-        
+
         chapter_content = read_text_file(chapter_path)
-        
-        # TODO: 实现审查系统
-        # 这里先返回一个示例报告
+
+        # 加载细纲和上下文
+        outline = self._load_chapter_outline(chapter_num)
+        context_info = self._load_context_info(chapter_num)
+
+        if depth == "core":
+            # 快速审查：只运行逻辑检查和 3 个核心审查器
+            console.print("[cyan]运行核心审查...[/cyan]")
+
+            # 逻辑检查
+            logic_result = await self.logic_checker.check(chapter_num, chapter_content)
+
+            # 一致性检查
+            consistency_result = await self.consistency_checker.check(chapter_num, chapter_content, outline or {})
+
+            # 连贯性检查
+            continuity_result = await self.continuity_checker.check(chapter_num, chapter_content, context_info.get("recent_summary", ""))
+
+            # OOC 检查
+            ooc_result = await self.ooc_checker.check(chapter_num, chapter_content)
+
+            # 汇总
+            dimension_scores = {
+                "logic": 100 if logic_result["success"] else 30,
+                "consistency": consistency_result.score,
+                "continuity": continuity_result.score,
+                "ooc": ooc_result.score,
+            }
+
+            all_issues = []
+            all_issues.extend(consistency_result.issues)
+            all_issues.extend(continuity_result.issues)
+            all_issues.extend(ooc_result.issues)
+
+        else:
+            # 完整审查：运行所有 7 个审查器
+            console.print("[cyan]运行完整七维审查...[/cyan]")
+
+            review_results = await self._step3_parallel_review(
+                chapter_num, chapter_content, outline or {}, context_info
+            )
+
+            dimension_scores = {
+                "logic": 100 if (await self.logic_checker.check(chapter_num, chapter_content))["success"] else 30,
+                **{k: v for k, v in review_results["dimension_scores"].items()},
+            }
+
+            all_issues = review_results["issues"]
+
+        # 计算总分
+        weights = {
+            "logic": 0.25,
+            "consistency": 0.20,
+            "continuity": 0.18,
+            "ooc": 0.18,
+            "high_point": 0.07,
+            "pacing": 0.06,
+            "reader_pull": 0.06,
+        }
+
+        overall_score = sum(
+            dimension_scores.get(name, 50) * weights.get(name, 0)
+            for name in dimension_scores
+        )
+        overall_score = int(overall_score)
+
+        # 统计严重程度
+        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for issue in all_issues:
+            sev = issue.severity if hasattr(issue, 'severity') else issue.get('severity', 'medium')
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+
+        # 判断是否通过
+        has_critical = severity_counts["critical"] > 0
+        has_multiple_high = severity_counts["high"] >= 3
+        pass_ = not (has_critical or has_multiple_high or overall_score < 60)
+
+        # 生成摘要
+        summary_lines = [f"审查结果：第 {chapter_num} 章"]
+        for name, score in dimension_scores.items():
+            emoji = "✓" if score >= 80 else "⚠" if score >= 60 else "✗"
+            summary_lines.append(f"  {emoji} {name}: {score}")
+        summary_lines.append(f"\n总分: {overall_score}/100")
+        summary_lines.append(f"结果: {'通过' if pass_ else '未通过'}")
+        if severity_counts["critical"] > 0:
+            summary_lines.append(f"\n⚠ 发现 {severity_counts['critical']} 个严重问题")
+        if severity_counts["high"] > 0:
+            summary_lines.append(f"⚠ 发现 {severity_counts['high']} 个高优先级问题")
+
         report = ReviewReport(
             agent="review-system",
             chapter=chapter_num,
-            overall_score=80,
-            pass_=True,
-            dimension_scores={
-                "爽点密度": 75,
-                "设定一致性": 85,
-                "节奏控制": 80,
-                "人物塑造": 85,
-                "连贯性": 80,
-                "追读力": 75,
-            },
-            summary="章节质量良好，继续保持！",
+            overall_score=overall_score,
+            pass_=pass_,
+            dimension_scores=dimension_scores,
+            severity_counts=severity_counts,
+            issues=all_issues,
+            summary="\n".join(summary_lines),
         )
-        
+
+        # 保存审查检查点
+        self.state_manager.add_review_checkpoint(chapter_num, overall_score, pass_)
+
         console.print(f"[bold green]审查完成，总分: {report.overall_score}[/bold green]\n")
         return report

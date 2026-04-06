@@ -96,26 +96,46 @@ class GenderPronounScanner:
     def _count_pronouns_near_name(self, content: str, name: str) -> tuple[int, int]:
         """
         在角色名附近统计代词出现次数
-        
+
         Returns:
             (male_count, female_count)
         """
         male_count = 0
         female_count = 0
-        
+
+        # 追踪已统计过的代词位置，避免重叠窗口重复计数
+        counted_male_positions: set[int] = set()
+        counted_female_positions: set[int] = set()
+
         # 查找所有角色名出现的位置
         name_pattern = re.escape(name)
-        for match in re.finditer(name_pattern, content):
-            start = max(0, match.start() - self.WINDOW_SIZE)
-            end = min(len(content), match.end() + self.WINDOW_SIZE)
+        name_matches = list(re.finditer(name_pattern, content))
+
+        for name_match in name_matches:
+            start = max(0, name_match.start() - self.WINDOW_SIZE)
+            end = min(len(content), name_match.end() + self.WINDOW_SIZE)
             window = content[start:end]
-            
+            window_start_offset = start  # 窗口在原文中的起始位置
+
             # 统计代词（排除角色名本身包含代词的情况）
             for pronoun in self.MALE_PRONOUNS:
-                male_count += len(re.findall(re.escape(pronoun), window))
+                for pron_match in re.finditer(re.escape(pronoun), window):
+                    # 计算在原文中的绝对位置
+                    abs_pos = window_start_offset + pron_match.start()
+                    # 去重：如果这个位置已经统计过，跳过
+                    if abs_pos not in counted_male_positions:
+                        counted_male_positions.add(abs_pos)
+                        male_count += 1
+
             for pronoun in self.FEMALE_PRONOUNS:
-                female_count += len(re.findall(re.escape(pronoun), window))
-        
+                for pron_match in re.finditer(re.escape(pronoun), window):
+                    # 计算在原文中的绝对位置
+                    abs_pos = window_start_offset + pron_match.start()
+                    # 去重：如果这个位置已经统计过，跳过
+                    if abs_pos not in counted_female_positions:
+                        counted_female_positions.add(abs_pos)
+                        female_count += 1
+
         return male_count, female_count
     
     def get_error_message(self, issues: List[GenderIssue] = None) -> str:

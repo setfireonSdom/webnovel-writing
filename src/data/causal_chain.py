@@ -8,6 +8,7 @@
 
 import json
 import logging
+import re
 from enum import Enum
 from datetime import datetime
 from pathlib import Path
@@ -98,10 +99,10 @@ class CausalChainTracker:
     # ===== 因果债管理 =====
     
     def add_debt(
-        self, 
-        debtor: str, 
-        creditor: str, 
-        debt_type: str, 
+        self,
+        debtor: str,
+        creditor: str,
+        debt_type: str,
         description: str,
         chapter_num: int,
         urgency: int = 50
@@ -143,7 +144,7 @@ class CausalChainTracker:
     def get_overdue_debts(self, current_chapter: int, threshold: int = 30) -> List[CausalDebt]:
         """获取超期未还的债"""
         return [
-            d for d in self.debts.values()
+            d for d in self.debts.values() 
             if not d.is_paid and (current_chapter - d.created_chapter) > threshold
         ]
     
@@ -195,23 +196,23 @@ class CausalChainTracker:
     def resolve_foreshadowing(self, foreshadowing_id: str, chapter_num: int) -> bool:
         """回收伏笔"""
         return self.update_foreshadowing(
-            foreshadowing_id, 
-            chapter_num, 
+            foreshadowing_id,
+            chapter_num,
             state=ForeshadowingState.RESOLVED
         )
     
     def get_active_foreshadowings(self) -> List[Foreshadowing]:
         """获取活跃的伏笔"""
         return [
-            f for f in self.foreshadowings.values()
+            f for f in self.foreshadowings.values() 
             if f.state in [ForeshadowingState.OPEN, ForeshadowingState.ACTIVE]
         ]
     
     def get_overdue_foreshadowings(self, current_chapter: int, threshold: int = 50) -> List[Foreshadowing]:
         """获取超期未回收的伏笔"""
         return [
-            f for f in self.foreshadowings.values()
-            if f.state in [ForeshadowingState.OPEN, ForeshadowingState.ACTIVE]
+            f for f in self.foreshadowings.values() 
+            if f.state in [ForeshadowingState.OPEN, ForeshadowingState.ACTIVE] 
             and (current_chapter - f.created_chapter) > threshold
         ]
     
@@ -250,9 +251,9 @@ class CausalChainTracker:
         
         return "\n".join(lines)
     
-    def analyze_chapter_for_debts_and_foreshadowings(
-        self, 
-        chapter_num: int, 
+    async def analyze_chapter_for_debts_and_foreshadowings(
+        self,
+        chapter_num: int,
         text_content: str,
         llm=None
     ) -> Dict[str, Any]:
@@ -266,7 +267,9 @@ class CausalChainTracker:
         
         if llm:
             # 使用AI提取
-            extraction = self._extract_with_ai(chapter_num, text_content, llm)
+            extraction = await self._extract_with_ai(chapter_num, text_content, llm)
+            if not extraction:
+                return results
             
             # 添加新债
             for debt in extraction.get("new_debts", []):
@@ -306,7 +309,104 @@ class CausalChainTracker:
         
         return results
     
-    def _extract_with_ai(self, chapter_num: int, text: str, llm) -> Dict[str, Any]:
+    async def _extract_with_ai(self, chapter_num: int, text: str, llm) -> Dict[str, Any]:
         """使用AI提取因果链变化"""
-        # 这里调用LLM提取
-        pass
+        text_snippet = text[:6000]  # 截断避免超出上下文
+        
+        prompt = f"""你是专业的网文因果链分析助手。请从以下章节内容中提取：
+1. 新增的因果债（谁欠了谁什么）
+2. 已还的因果债（谁还了谁的债）
+3. 新增的伏笔/悬念
+4. 已回收的伏笔
+
+## 当前活跃的因果债
+{self._format_active_debts()}
+
+## 当前活跃的伏笔
+{self._format_active_foreshadowings()}
+
+## 章节内容
+{text_snippet}
+
+## 任务
+分析章节内容，找出所有因果链变化。
+
+请严格按照以下 JSON 格式输出：
+
+```json
+{{
+  "new_debts": [
+    {{
+      "debtor": "欠债人",
+      "creditor": "债权人",
+      "type": "债类型（如：救命之恩、承诺、金钱、感情等）",
+      "description": "欠了什么",
+      "urgency": 50
+    }}
+  ],
+  "paid_debts": [
+    {{
+      "debt_id": "DEBT_0001",
+      "description": "如何还的债"
+    }}
+  ],
+  "new_foreshadowings": [
+    {{
+      "description": "伏笔描述",
+      "type": "悬念/冲突/关系/物品",
+      "expected_resolve_chapter": null
+    }}
+  ],
+  "resolved_foreshadowings": [
+    {{
+      "foreshadowing_id": "FS_0001",
+      "description": "如何回收的伏笔"
+    }}
+  ]
+}}
+```
+
+**注意**:
+- 如果没有变化，对应字段输出空数组 []
+- 还债/回收伏笔时，必须使用正确的 debt_id 或 foreshadowing_id
+- 如果无法匹配 ID，可以输出描述，由后续代码处理
+- 只输出 JSON，不要输出其他内容
+"""
+        
+        try:
+            response = await llm.generate(
+                prompt=prompt,
+                system_prompt="你是专业的网文因果链分析助手，擅长从小说文本中提取因果链变化。只输出JSON，不要输出其他内容。",
+                temperature=0.1,
+                max_tokens=2048,
+            )
+            
+            # 提取 JSON
+            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+            if json_match:
+                extraction = json.loads(json_match.group())
+                return extraction
+            return {}
+        except Exception as e:
+            logger.warning(f"AI 因果链提取失败: {e}")
+            return {}
+    
+    def _format_active_debts(self) -> str:
+        """格式化活跃的因果债"""
+        unpaid = self.get_unpaid_debts()
+        if not unpaid:
+            return "（暂无活跃因果债）"
+        lines = []
+        for debt in unpaid[:10]:
+            lines.append(f"- [{debt.id}] {debt.debtor} 欠 {debt.creditor}: {debt.description} (紧急度: {debt.urgency})")
+        return "\n".join(lines)
+    
+    def _format_active_foreshadowings(self) -> str:
+        """格式化活跃的伏笔"""
+        active = self.get_active_foreshadowings()
+        if not active:
+            return "（暂无活跃伏笔）"
+        lines = []
+        for fs in active[:10]:
+            lines.append(f"- [{fs.id}] [{fs.type}] {fs.description} (埋于第{fs.created_chapter}章)")
+        return "\n".join(lines)

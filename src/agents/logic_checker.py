@@ -3,7 +3,9 @@
 负责检查生成内容是否存在严重逻辑漏洞（如主角变性、境界倒退等）。
 """
 
+import json
 import logging
+import re
 from typing import Dict, Any
 
 from ..llm.base import BaseLLM, LLMResponse
@@ -17,22 +19,43 @@ CHECKER_PROMPT = """
 ## 核心事实（必须严格遵守）
 {state_summary}
 
-## 待审查正文
+## 待审查正文（前 4000 字）
 {chapter_content}
 
 ## 审查标准
-1. **主角性别一致性**：检查主角（{protagonist_name}，性别：{protagonist_gender}）是否被错误描述为异性。
-2. **状态一致性**：境界是否无故倒退？伤势是否未痊愈就生龙活虎？
-3. **逻辑常识**：是否存在违反常识的描述（如"他和她是某人的女儿"）。
+1. **性别一致性**：检查每个角色的性别代词是否与设定一致（男=他，女=她）。
+2. **境界一致性**：境界是否无故倒退？
+3. **状态一致性**：伤势是否未痊愈就生龙活虎？
+4. **逻辑常识**：是否存在违反常识的描述。
 
-请直接输出审查结果。如果没有问题，输出：
-【PASS】
+请严格按照以下 JSON 格式输出：
 
-如果有严重逻辑错误，输出：
-【FAIL】
-错误详情：(简述错误原因，例如：主角被描述成了女性)
-错误类型：(gender|cultivation|status|logic)
-正确值：(说明正确的值应该是什么)
+```json
+{{
+  "pass": true,
+  "issues": []
+}}
+```
+
+或者如果有问题：
+
+```json
+{{
+  "pass": false,
+  "issues": [
+    {{
+      "error_type": "gender|cultivation|status|logic",
+      "description": "错误详情",
+      "correct_value": "正确的值应该是什么"
+    }}
+  ]
+}}
+```
+
+**注意**：
+- 如果没有问题，pass 为 true，issues 为空数组
+- 如果有多个问题，每个问题都单独列出
+- 只输出 JSON，不要输出其他内容
 """
 
 
@@ -46,26 +69,26 @@ class LogicChecker:
 
         # 提取关键状态用于校验
         protagonist_name = state.protagonist.get("name", "主角")
-        
-        # 【关键修复】从 character_states 中查找主角的完整信息，而不是只从 protagonist dict 取
+
+        # 从 character_states 中查找主角的完整信息
         protagonist_state = None
         for cs in state.character_states:
             if cs.name == protagonist_name:
                 protagonist_state = cs
                 break
-        
-        # 性别 - 优先从 character_states 取，确保数据完整
+
+        # 性别 - 优先从 character_states 取
         if protagonist_state and protagonist_state.gender:
             protagonist_gender = protagonist_state.gender
         else:
             protagonist_gender = state.protagonist.get("gender", "男")
-        
+
         # 境界
         if protagonist_state and protagonist_state.cultivation:
             protagonist_cultivation = protagonist_state.cultivation
         else:
             protagonist_cultivation = state.protagonist.get("cultivation", "未知")
-        
+
         # 状态
         if protagonist_state and protagonist_state.status:
             protagonist_status = protagonist_state.status
@@ -77,7 +100,7 @@ class LogicChecker:
         char_state_info += f"性别: {protagonist_gender}\n"
         char_state_info += f"境界: {protagonist_cultivation}\n"
         char_state_info += f"状态: {protagonist_status}\n"
-        
+
         # 添加其他角色的关键信息
         for cs in state.character_states:
             if cs.name != protagonist_name:
@@ -86,33 +109,87 @@ class LogicChecker:
         prompt = CHECKER_PROMPT.format(
             state_summary=char_state_info,
             chapter_content=content[:4000],
-            protagonist_name=protagonist_name,
-            protagonist_gender=protagonist_gender,
         )
 
         response = await self.llm.generate(
             prompt=prompt,
-            system_prompt="你是一个无情的逻辑检查机器，专门寻找 AI 写作中的常识性错误和逻辑矛盾。",
+            system_prompt="你是一个无情的逻辑检查机器，专门寻找 AI 写作中的常识性错误和逻辑矛盾。只输出JSON，不要输出其他内容。",
             temperature=0.1,
-            max_tokens=512,
+            max_tokens=1024,
         )
 
-        if "【PASS】" in response.text:
+        try:
+            # 尝试解析 JSON
+            result = self._parse_response(response.text)
+        except Exception as e:
+            # 回退到旧的文本解析方式
+            logger.warning(f"第 {chapter_num} 章逻辑审查 JSON 解析失败，使用回退解析: {e}")
+            result = self._fallback_parse(response.text)
+
+        if result.get("pass"):
             logger.info(f"第 {chapter_num} 章逻辑审查通过。")
             return {"success": True, "reason": ""}
 
-        # 提取错误信息
-        reason = response.text.split("错误详情：")[-1].strip() if "错误详情：" in response.text else "存在逻辑错误"
-        
-        # 【关键修复】提取"正确值"信息，用于反馈给写作LLM
-        correct_value = ""
-        if "正确值：" in response.text:
-            correct_value = response.text.split("正确值：")[-1].split("\n")[0].strip()
-        
+        # 有 issues，返回第一个问题的详细信息
+        issues = result.get("issues", [])
+        if issues:
+            first_issue = issues[0]
+            reason = first_issue.get("description", "存在逻辑错误")
+            correct_value = first_issue.get("correct_value", "")
+            error_type = first_issue.get("error_type", "unknown")
+        else:
+            reason = "存在逻辑错误（未提供详细信息）"
+            correct_value = ""
+            error_type = "unknown"
+
+        # 如果有多个问题，合并描述
+        if len(issues) > 1:
+            extra_issues = [f"- {i.get('description', '')}" for i in issues[1:]]
+            reason += "\n\n其他问题:\n" + "\n".join(extra_issues)
+
         logger.warning(f"第 {chapter_num} 章逻辑审查失败: {reason}")
         return {
-            "success": False, 
+            "success": False,
             "reason": reason,
-            "correct_value": correct_value,  # 新增：正确的值
-            "error_type": response.text.split("错误类型：")[-1].split("\n")[0].strip() if "错误类型：" in response.text else "unknown"
+            "correct_value": correct_value,
+            "error_type": error_type,
+        }
+
+    def _parse_response(self, text: str) -> Dict[str, Any]:
+        """解析 LLM 的 JSON 响应"""
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        raise ValueError("未找到 JSON 对象")
+
+    def _fallback_parse(self, text: str) -> Dict[str, Any]:
+        """回退的文本解析方式（兼容旧格式）"""
+        # 检查是否有 PASS 标记
+        if "【PASS】" in text or "PASS" in text:
+            return {"pass": True, "issues": []}
+
+        # 尝试提取 FAIL 信息
+        reason = text.split("错误详情：")[-1].strip() if "错误详情：" in text else "存在逻辑错误"
+        if "错误详情:" in text:  # 也支持英文冒号
+            reason = text.split("错误详情:")[-1].strip()
+
+        correct_value = ""
+        if "正确值：" in text:
+            correct_value = text.split("正确值：")[-1].split("\n")[0].strip()
+        elif "正确值:" in text:
+            correct_value = text.split("正确值:")[-1].split("\n")[0].strip()
+
+        error_type = "unknown"
+        if "错误类型：" in text:
+            error_type = text.split("错误类型：")[-1].split("\n")[0].strip()
+        elif "错误类型:" in text:
+            error_type = text.split("错误类型:")[-1].split("\n")[0].strip()
+
+        return {
+            "pass": False,
+            "issues": [{
+                "error_type": error_type,
+                "description": reason,
+                "correct_value": correct_value,
+            }]
         }
