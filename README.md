@@ -29,7 +29,7 @@
 **路径 A：用 uv（推荐，更快）**
 
 ```bash
-git clone <你的仓库地址>
+git clone <仓库地址>
 cd novel-writer
 
 # 安装 uv：curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -185,7 +185,7 @@ novel-writer check-outline --volume 1
 
 | 模式 | 做了什么 | 耗时 | 适用场景 |
 |------|---------|------|---------|
-| **standard** | 初稿 → 风格优化 → 逻辑审查 → 7维审查 → 智能润色 → 保存 → 状态更新 → Git备份 | ~45-60s/章 | 正式写作，质量优先 |
+| **standard** | 初稿 → 风格优化 → 状态机校验 → 逻辑审查 → 7维审查 → 智能润色 → 保存 → 状态更新 → Git备份 | ~50-70s/章 | 正式写作，质量优先 |
 | **fast** | 初稿 → 风格优化 → 保存 → 状态更新 | ~25-35s/章 | 快速生成，跳过审查 |
 | **minimal** | 只生成初稿 | ~15-20s/章 | 原型测试，最快 |
 
@@ -368,8 +368,8 @@ novel-writer dashboard --reload     # 开发热重载
 ### .env（必须）
 
 ```bash
-# 最少只需要改这三行
-NOVEL_LLM_PROVIDER=openai
+# 最少只需要改这三行（用千问直连）
+NOVEL_LLM_PROVIDER=qwen
 QWEN_API_KEY=替换成你的key
 QWEN_MODEL=qwen3-max-2026-01-23
 
@@ -464,4 +464,6 @@ Python 3.10+, Pydantic 2, httpx, OpenAI SDK, rank-bm25, jieba, Rich, FastAPI, py
 
 ---
 
-GPL v3
+## 许可证
+
+本项目采用 [GPL v3](LICENSE) 许可证。

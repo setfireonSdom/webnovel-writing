@@ -2,8 +2,8 @@
 # 复制为 config.yaml 并修改为你的配置
 
 llm:
-  provider: openai  # qwen | ollama | openai（百炼平台用 openai）
-  model: glm-5  # 你使用的模型名
+  provider: qwen  # qwen | ollama | openai（百炼平台等 OpenAI 兼容端点用 openai）
+  model: qwen3-max-2026-01-23  # 你使用的模型名
   api_key: "${QWEN_API_KEY}"  # 从环境变量读取
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   temperature: 0.7
