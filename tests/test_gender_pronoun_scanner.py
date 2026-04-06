@@ -3,15 +3,15 @@
 """
 
 import pytest
-from src.utils.gender_pronoun_scanner import GenderPrononScanner
+from src.utils.gender_pronoun_scanner import GenderPronounScanner
 
 
-class TestGenderPrononScanner:
+class TestGenderPronounScanner:
     """性别代词扫描器测试"""
 
     def test_male_character_no_issues(self):
         """男性角色使用正确代词，无问题"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         张三走进房间，他看了看四周，然后他坐了下来。
         他觉得今天天气不错，于是他决定出去走走。
@@ -21,7 +21,7 @@ class TestGenderPrononScanner:
 
     def test_female_character_no_issues(self):
         """女性角色使用正确代词，无问题"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         李四走进房间，她看了看四周，然后她坐了下来。
         她觉得今天天气不错，于是她决定出去走走。
@@ -31,7 +31,7 @@ class TestGenderPrononScanner:
 
     def test_male_character_wrong_pronoun(self):
         """男性角色被错误使用女性代词"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         张三走进房间，她看了看四周，然后她坐了下来。
         她觉得今天天气不错，于是她决定出去走走。
@@ -46,7 +46,7 @@ class TestGenderPrononScanner:
 
     def test_female_character_wrong_pronoun(self):
         """女性角色被错误使用男性代词"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         李四走进房间，他看了看四周，然后他坐了下来。
         他觉得今天天气不错，于是他决定出去走走。
@@ -61,7 +61,7 @@ class TestGenderPrononScanner:
 
     def test_unknown_gender_skipped(self):
         """未知性别的角色跳过检查"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         王五走进房间，他看了看四周。
         """
@@ -70,7 +70,7 @@ class TestGenderPrononScanner:
 
     def test_multiple_characters_mixed(self):
         """多个角色混合检查"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         张三和李四一起走进房间。
         他看了看四周，然后她坐了下来。
@@ -83,7 +83,7 @@ class TestGenderPrononScanner:
 
     def test_error_message_format(self):
         """错误消息格式正确"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         张三走进房间，她看了看四周，然后她坐了下来。
         她觉得今天天气不错，于是她决定出去走走。
@@ -99,7 +99,7 @@ class TestGenderPrononScanner:
 
     def test_threshold_prevents_false_positives(self):
         """阈值机制防止误报（少于3次不报错）"""
-        scanner = GenderPrononScanner()
+        scanner = GenderPronounScanner()
         content = """
         张三走进房间，她看了看。
         """

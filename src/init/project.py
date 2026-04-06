@@ -92,6 +92,22 @@ MASTER_OUTLINE_TEMPLATE = """# 总纲
 
 ## 故事主线
 {main_storyline}
+
+## 世界观
+{worldview}
+
+## 力量体系
+{power_type}
+境界等级：{realms}
+
+## 主角设定
+姓名：{protagonist_name}
+性别：{protagonist_gender}
+欲望/目标：{protagonist_desire}
+缺陷：{protagonist_flaw}
+性格特点：{protagonist_traits}
+背景故事：{protagonist_background}
+金手指/系统：{golden_finger}
 """
 
 PROJECT_MEMORY_TEMPLATE = """{{
@@ -184,6 +200,7 @@ class InitProject:
 3. 境界体系要完整，至少 6-8 个等级
 4. 核心冲突要明确，能支撑 100 万字以上剧情
 5. 主角性别要明确
+6. **重要**：如果是"都市"、"都市神豪"、"都市生活"等现代都市题材，力量体系必须是**财富等级、商业地位、人脉影响力**等现实体系，**绝对不要**用修仙境界（炼气、筑基、金丹、元婴、化神等）。如果是"仙侠"、"玄幻"、"修仙"等奇幻题材，才可以使用修仙境界。题材和力量体系必须匹配。
 """
         try:
             import re
@@ -211,6 +228,50 @@ class InitProject:
     
     def _get_default_info(self, title: str, genre: str) -> Dict[str, Any]:
         """获取默认设定（备用方案）"""
+        # 根据题材动态生成默认力量体系
+        genre_lower = genre.lower()
+        
+        # 都市题材 → 现实体系
+        if any(kw in genre_lower for kw in ["都市", "神豪", "商战", "职场", "现代"]):
+            power_type = "财富/地位体系"
+            realms = "路人,小有资产,千万富豪,亿万富豪,十亿级,百亿级,商业巨擘,财阀"
+            worldview = "现代都市背景，表面繁荣平静，暗藏资本博弈"
+        # 仙侠/玄幻/修仙 → 修仙境界
+        elif any(kw in genre_lower for kw in ["仙侠", "玄幻", "修仙", "修真", "仙侠"]):
+            power_type = "修炼体系"
+            realms = "炼气,筑基,金丹,元婴,化神,炼虚,合体,大乘,渡劫"
+            worldview = "修仙世界，弱肉强食，强者为尊"
+        # 历史/架空 → 武力/官职体系
+        elif any(kw in genre_lower for kw in ["历史", "架空", "古代"]):
+            power_type = "武力/官职体系"
+            realms = "平民,武者,武将,将军,王侯,帝王"
+            worldview = "古代王朝背景，皇权至上，江湖与朝堂并存"
+        # 科幻 → 科技等级
+        elif any(kw in genre_lower for kw in ["科幻", "星际", "未来"]):
+            power_type = "科技等级"
+            realms = "地球文明,行星级文明,恒星级文明,星系级文明,宇宙级文明"
+            worldview = "未来星际时代，人类文明已扩张至银河系"
+        # 悬疑/惊悚 → 无明确等级
+        elif any(kw in genre_lower for kw in ["悬疑", "惊悚", "恐怖", "灵异"]):
+            power_type = "灵异能力体系"
+            realms = "普通人,开眼,通灵,御鬼,驱魔,天师"
+            worldview = "现代都市背景，表面正常，暗藏灵异与超自然力量"
+        # 言情 → 情感/社会地位
+        elif any(kw in genre_lower for kw in ["言情", "恋爱", "甜宠"]):
+            power_type = "社会地位/情感成熟度"
+            realms = "陌生人,普通朋友,暧昧对象,恋人,未婚夫妻,夫妻"
+            worldview = "现代都市背景，聚焦职场、家庭、情感纠葛"
+        # 游戏/电竞 → 段位/等级
+        elif any(kw in genre_lower for kw in ["游戏", "电竞", "网游"]):
+            power_type = "游戏段位体系"
+            realms = "青铜,白银,黄金,铂金,钻石,大师,宗师,最强王者"
+            worldview = "现代电竞/网游世界，虚拟与现实的界限模糊"
+        # 默认：通用修炼体系
+        else:
+            power_type = "修炼体系"
+            realms = "入门,初阶,中阶,高阶,大师,宗师,巅峰,超脱"
+            worldview = "待补充"
+        
         return {
             "title": title,
             "genre": genre,
@@ -221,15 +282,15 @@ class InitProject:
             "selling_points": "待补充",
             "main_storyline": "待补充",
             "protagonist_name": "林晨",
-            "protagonist_gender": "男",  # 【修复】添加性别
+            "protagonist_gender": "男",
             "protagonist_desire": "变强",
             "protagonist_flaw": "过于正直",
             "protagonist_traits": "坚韧、聪明、重情义",
             "protagonist_background": "普通人意外获得机缘",
             "golden_finger": "系统流",
-            "worldview": "现代都市背景下的隐藏世界",
-            "power_type": "修炼体系",
-            "realms": "炼气,筑基,金丹,元婴,化神,炼虚,合体,大乘,渡劫",
+            "worldview": worldview,
+            "power_type": power_type,
+            "realms": realms,
             "social_structure": "待补充",
             "important_locations": "待补充",
             "time_period": "现代"
@@ -274,40 +335,121 @@ class InitProject:
         return project_root
     
     def _collect_project_info(self, title: str, genre: str) -> Dict[str, Any]:
-        """交互式收集项目信息"""
-        console.print("[bold]请填写项目信息（直接回车使用默认值）[/bold]\n")
-        
+        """交互式收集项目信息，用户不填的字段由 AI 自动补全"""
+        console.print("[bold]请填写项目信息（直接回车跳过，AI 会自动补全）[/bold]\n")
+
         info = {
             "title": title,
             "genre": genre,
         }
-        
+
         # 基础信息
-        info["target_scale"] = Prompt.ask("目标字数", default="100万字")
+        info["target_scale"] = Prompt.ask("目标字数", default="")
         info["one_liner"] = Prompt.ask("一句话简介", default="")
         info["core_conflict"] = Prompt.ask("核心冲突", default="")
-        info["target_audience"] = Prompt.ask("目标读者", default="网文读者")
-        
+        info["target_audience"] = Prompt.ask("目标读者", default="")
+        info["selling_points"] = Prompt.ask("主要卖点", default="")
+        info["main_storyline"] = Prompt.ask("故事主线", default="")
+
         # 主角信息
         console.print("\n[bold]主角设定[/bold]")
-        info["protagonist_name"] = Prompt.ask("主角姓名", default="林晨")
-        info["protagonist_gender"] = Prompt.ask("主角性别", choices=["男", "女", "其他"], default="男")  # 【修复】添加性别
-        info["protagonist_desire"] = Prompt.ask("主角欲望/目标", default="变强")
-        info["protagonist_flaw"] = Prompt.ask("主角缺陷", default="过于正直")
-        info["protagonist_traits"] = Prompt.ask("性格特点（逗号分隔）", default="坚韧、聪明、重情义")
-        info["protagonist_background"] = Prompt.ask("背景故事", default="普通人意外获得机缘")
-        
+        info["protagonist_name"] = Prompt.ask("主角姓名", default="")
+        info["protagonist_gender"] = Prompt.ask("主角性别", choices=["男", "女", "其他", ""], default="")
+        info["protagonist_desire"] = Prompt.ask("主角欲望/目标", default="")
+        info["protagonist_flaw"] = Prompt.ask("主角缺陷", default="")
+        info["protagonist_traits"] = Prompt.ask("性格特点（逗号分隔）", default="")
+        info["protagonist_background"] = Prompt.ask("背景故事", default="")
+
         # 金手指
         console.print("\n[bold]金手指/系统[/bold]")
-        info["golden_finger"] = Prompt.ask("金手指类型", default="系统流")
-        
+        info["golden_finger"] = Prompt.ask("金手指类型", default="")
+
         # 世界观
         console.print("\n[bold]世界观[/bold]")
-        info["worldview"] = Prompt.ask("世界概述", default="现代都市背景下的隐藏世界")
-        info["power_type"] = Prompt.ask("力量体系类型", default="修炼体系")
-        info["realms"] = Prompt.ask("境界等级（用逗号分隔）", default="炼气,筑基,金丹,元婴,化神")
-        
+        info["worldview"] = Prompt.ask("世界概述", default="")
+        info["power_type"] = Prompt.ask("力量体系类型", default="")
+        info["realms"] = Prompt.ask("境界等级（用逗号分隔）", default="")
+        info["social_structure"] = Prompt.ask("社会结构", default="")
+        info["important_locations"] = Prompt.ask("重要地点", default="")
+        info["time_period"] = Prompt.ask("时代背景", default="")
+
+        # 收集用户输入后，用 AI 补全空字段
+        console.print("\n[yellow]⏳ 正在让 AI 补全未填写的设定...[/yellow]")
+        info = self._ai_fill_missing_fields(title, genre, info)
+
         return info
+
+    def _ai_fill_missing_fields(self, title: str, genre: str, info: Dict[str, Any]) -> Dict[str, Any]:
+        """用 AI 补全用户未填写的空字段"""
+        # 找出空字段
+        empty_fields = {k: v for k, v in info.items() if not v}
+        if not empty_fields:
+            return info
+
+        prompt = f"""
+你是专业的网文主编。用户正在创建一部{genre}题材的小说《{title}》。
+用户已经填写了部分设定，请根据已填写的内容和题材特点，补全所有未填写的设定。
+
+## 用户已填写的内容
+{json.dumps({k: v for k, v in info.items() if v}, ensure_ascii=False, indent=2)}
+
+## 需要补全的字段
+{list(empty_fields.keys())}
+
+请严格按照以下 JSON 格式输出补全后的**全部**字段（包括用户已填写的和你要补全的）：
+
+```json
+{{
+  "target_scale": "目标字数",
+  "one_liner": "一句话简介",
+  "core_conflict": "核心冲突",
+  "target_audience": "目标读者",
+  "selling_points": "主要卖点",
+  "main_storyline": "故事主线",
+  "protagonist_name": "主角姓名",
+  "protagonist_gender": "男/女/其他",
+  "protagonist_desire": "主角欲望/目标",
+  "protagonist_flaw": "主角缺陷",
+  "protagonist_traits": "性格特点",
+  "protagonist_background": "背景故事",
+  "golden_finger": "金手指类型",
+  "worldview": "世界概述",
+  "power_type": "力量体系类型",
+  "realms": "境界等级（用逗号分隔）",
+  "social_structure": "社会结构",
+  "important_locations": "重要地点",
+  "time_period": "时代背景"
+}}
+```
+
+要求：
+1. 用户已填写的字段**必须原样保留，不得修改**。
+2. 未填写的字段请根据题材和用户已填写的内容合理补全。
+3. 如果是都市/神豪题材，力量体系必须是财富/地位相关，**绝对不要**用修仙境界。
+4. 只输出 JSON，不要有任何解释。
+"""
+        try:
+            response = self.llm.generate(
+                prompt=prompt,
+                system_prompt="你是专业的网文主编，擅长设计吸引人的小说设定。",
+                temperature=0.8,
+                max_tokens=2048,
+            )
+
+            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+            if json_match:
+                filled_info = json.loads(json_match.group())
+                # 合并：AI 补全的 + 用户填写的（用户填写的优先）
+                for k, v in info.items():
+                    if v:  # 用户填了的，覆盖 AI 的输出
+                        filled_info[k] = v
+                return filled_info
+            else:
+                console.print("[yellow]⚠️ AI 补全返回格式异常，使用默认值[/yellow]")
+                return self._get_default_info(title, genre)
+        except Exception as e:
+            console.print(f"[yellow]⚠️ AI 补全失败: {e}，使用默认值[/yellow]")
+            return self._get_default_info(title, genre)
     
     def _create_project_structure(self, project_root: Path):
         """创建目录结构"""
@@ -435,7 +577,7 @@ class InitProject:
     def _generate_master_outline(self, project_root: Path, info: Dict[str, Any]):
         """生成总纲"""
         console.print("[cyan]生成总纲...[/cyan]")
-        
+
         outline_content = MASTER_OUTLINE_TEMPLATE.format(
             title=info["title"],
             genre=info["genre"],
@@ -443,10 +585,20 @@ class InitProject:
             core_conflict=info.get("core_conflict", "待补充"),
             target_audience=info.get("target_audience", ""),
             target_scale=info["target_scale"],
-            selling_points="待补充",
-            main_storyline="待补充",
+            selling_points=info.get("selling_points", "待补充"),
+            main_storyline=info.get("main_storyline", "待补充"),
+            worldview=info.get("worldview", "待补充"),
+            power_type=info.get("power_type", "待补充"),
+            realms=info.get("realms", "待补充"),
+            protagonist_name=info.get("protagonist_name", "待补充"),
+            protagonist_gender=info.get("protagonist_gender", "男"),
+            protagonist_desire=info.get("protagonist_desire", "待补充"),
+            protagonist_flaw=info.get("protagonist_flaw", "待补充"),
+            protagonist_traits=info.get("protagonist_traits", "待补充"),
+            protagonist_background=info.get("protagonist_background", "待补充"),
+            golden_finger=info.get("golden_finger", "待补充"),
         )
-        
+
         write_text_file(
             project_root / "大纲" / "总纲.md",
             outline_content,

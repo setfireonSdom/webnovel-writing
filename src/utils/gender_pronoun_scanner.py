@@ -23,7 +23,7 @@ class GenderIssue:
     severity: str = "critical"  # 固定为 critical
 
 
-class GenderPrononScanner:
+class GenderPronounScanner:
     """
     性别代词扫描器 - 纯正则实现，不依赖 LLM
     

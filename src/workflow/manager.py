@@ -43,7 +43,7 @@ from ..data.auto_audit import AutoAuditReport
 from ..data.state_machine import StateMachine
 from ..data.causal_chain import CausalChainTracker
 from ..utils.anti_ai_scanner import scanner as anti_ai_scanner
-from ..utils.gender_pronoun_scanner import GenderPrononScanner
+from ..utils.gender_pronoun_scanner import GenderPronounScanner
 from ..agents.checkers import WorldRulesChecker
 
 logger = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ class WorkflowManager:
         self.causal_chain = CausalChainTracker(self.project_root)
         
         # 初始化性别代词扫描器（不依赖LLM的快速检查）
-        self.gender_scanner = GenderPrononScanner()
+        self.gender_scanner = GenderPronounScanner()
 
         # 初始化 Git 备份
         git_config = self.workflow_config.get("git_backup", True)
