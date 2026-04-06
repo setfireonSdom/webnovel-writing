@@ -24,7 +24,7 @@
 
 ## 快速开始
 
-### 两条路，选一条
+两条路，选一条。
 
 **路径 A：用 uv（推荐，更快）**
 
@@ -34,14 +34,17 @@ cd novel-writer
 
 # 安装 uv：curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv
+source .venv/bin/activate
 uv pip install -r requirements.txt
 uv pip install -e .
 
 cp .env.example .env
 # 编辑 .env，把 QWEN_API_KEY 改成你自己的 Key
 
-uv run novel-writer preflight
-uv run novel-writer init --title "我的小说" --genre "都市"
+novel-writer init --title "我的小说" --genre "都市" --auto
+cd "我的小说"
+novel-writer plan --volume 1 --chapters 10 --auto --batch-size 5
+novel-writer write --chapter 1 --mode standard
 ```
 
 **路径 B：用 venv + pip（标准库，不需要额外安装）**
@@ -52,6 +55,7 @@ cd novel-writer
 
 python3 -m venv .venv
 source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
 
 pip install -r requirements.txt
 pip install -e .
@@ -59,10 +63,14 @@ pip install -e .
 cp .env.example .env
 # 编辑 .env，把 QWEN_API_KEY 改成你自己的 Key
 
-novel-writer preflight
-novel-writer init --title "我的小说" --genre "都市"
+novel-writer init --title "我的小说" --genre "都市" --auto
+cd "我的小说"
+novel-writer plan --volume 1 --chapters 10 --auto --batch-size 5
+novel-writer write --chapter 1 --mode standard
 ```
 
+> **注意**：安装完依赖后需要先 `source .venv/bin/activate` 激活虚拟环境，再运行命令。不想激活的话，用 `uv run novel-writer ...` 代替 `novel-writer ...`。
+>
 > **最低要求**：Python 3.10+、一个能用的 LLM API Key。其他都是可选的。
 
 ---
@@ -101,12 +109,12 @@ novel-writer init --title "我的小说" --genre "都市"
 └── 正文/                        # 空目录，等写作后生成
 ```
 
-**接下来要做的**：进入项目目录，编辑设定文件确认内容符合预期。
+**接下来要做的**：进入项目目录，查看设定文件确认内容符合预期。
 
 ```bash
 cd "我的小说"
-cat 设定集/角色设定.md    # 查看主角设定
-cat 设定集/世界观.md      # 查看世界观设定
+cat 设定集/角色设定.md
+cat 设定集/世界观.md
 ```
 
 ---
@@ -133,7 +141,7 @@ novel-writer plan --volume 1 --chapters 20
 
 生成完成后查看细纲：
 ```bash
-cat 大纲/细纲/卷1_细纲.json    # 查看第1卷细纲
+cat 大纲/细纲/卷1_细纲.json
 ```
 
 ---
@@ -170,7 +178,6 @@ novel-writer check-outline --volume 1
 ```bash
 novel-writer write --chapter 1 --mode standard
 novel-writer write --chapter 2 --mode standard
-novel-writer write --chapter 3 --mode standard
 ```
 
 **批量模式**：一口气写多章，适合快速推进
@@ -205,8 +212,8 @@ novel-writer write --start 11 --end 20 --mode fast
 #### 查看输出
 
 ```bash
-cat 正文/ch0001.md    # 查看第1章
-cat 正文/ch0002.md    # 查看第2章
+cat 正文/ch0001.md
+cat 正文/ch0002.md
 ```
 
 ---
@@ -301,8 +308,8 @@ novel-writer resume
 
 | 命令 | 说明 | 必需参数 | 可选参数 | 示例 |
 |------|------|---------|---------|------|
-| `preflight` | 检查环境是否就绪 | 无 | 无 | `novel-writer preflight` |
 | `init` | 创建新项目 | `--title`, `--genre` | `--auto` | `novel-writer init --title "书名" --genre "都市" --auto` |
+| `preflight` | 检查环境是否就绪 | 无 | 无 | `novel-writer preflight`（需在项目目录内运行） |
 | `plan` | 生成章节细纲 | `--volume`, `--chapters` | `--auto`, `--batch-size` | `novel-writer plan --volume 1 --chapters 50 --auto --batch-size 5` |
 | `check-outline` | 检查并优化细纲 | `--volume` | 无 | `novel-writer check-outline --volume 1` |
 | `write` | 写作章节 | `--chapter` 或 `--start`+`--end` | `--mode` | `novel-writer write --chapter 1 --mode standard` |
