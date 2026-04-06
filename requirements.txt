@@ -11,6 +11,7 @@ openai>=1.0.0              # OpenAI SDK（OpenAI 兼容模式）
 # RAG 依赖
 rank-bm25>=0.2.0           # BM25检索
 numpy>=1.24.0              # 数值计算
+jieba>=0.42.0              # 中文分词（BM25 检索必需）
 
 # 可选：Dashboard
 fastapi>=0.100.0           # Web 框架
