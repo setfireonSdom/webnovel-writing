@@ -70,6 +70,8 @@ cd "我的小说"
 novel-writer plan --volume 1 --chapters 10 --auto --batch-size 5
 novel-writer write --chapter 1 --mode standard
 ```
+![alt text](image.png)
+
 
 > **注意**：安装完依赖后需要先 `source .venv/bin/activate` 激活虚拟环境，再运行命令。不想激活的话，用 `uv run novel-writer ...` 代替 `novel-writer ...`。
 >
@@ -106,6 +108,7 @@ novel-writer init --title "我的小说" --genre "都市神豪"
 # 系统会逐一询问你各个设定，你可以填写也可以直接回车跳过
 # 你填了的字段会原样保留，你跳过的字段由 AI 自动补全
 ```
+![alt text](image-1.png)
 
 **方式二的工作流程**：
 1. 系统逐一询问：目标字数、一句话简介、核心冲突、主角姓名、性别、欲望、缺陷、性格、金手指、世界观、力量体系……

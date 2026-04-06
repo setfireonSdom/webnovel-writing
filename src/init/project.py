@@ -383,6 +383,9 @@ class InitProject:
 
     async def _ai_fill_missing_fields(self, title: str, genre: str, info: Dict[str, Any]) -> Dict[str, Any]:
         """用 AI 补全用户未填写的空字段"""
+        import re
+        import json
+        
         # 找出空字段
         empty_fields = {k: v for k, v in info.items() if not v}
         if not empty_fields:
