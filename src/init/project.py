@@ -127,11 +127,12 @@ class InitProject:
     
     def auto_initialize(self, title: str, genre: str) -> Path:
         """AI 全自动脑补所有设定（无需人工填写）"""
+        import asyncio
         console.print(f"[bold]\n🤖 AI 全自动初始化项目: {title} ({genre})[/bold]\n")
         console.print("[yellow]⏳ 正在让 AI 脑补所有设定，这可能需要 30-60 秒...[/yellow]\n")
-        
+
         # 让 AI 生成所有设定
-        project_info = self._ai_generate_project_info(title, genre)
+        project_info = asyncio.run(self._ai_generate_project_info(title, genre))
         
         # 创建目录结构
         project_root = Path.cwd() / title
@@ -163,7 +164,7 @@ class InitProject:
         
         return project_root
 
-    def _ai_generate_project_info(self, title: str, genre: str) -> Dict[str, Any]:
+    async def _ai_generate_project_info(self, title: str, genre: str) -> Dict[str, Any]:
         """使用 AI 自动生成项目信息"""
         prompt = f"""
 你是专业的网文主编。请根据书名《{title}》和题材（{genre}），自动生成完整的项目设定。
@@ -205,13 +206,13 @@ class InitProject:
         try:
             import re
             import json
-            response = self.llm.generate(
+            response = await self.llm.generate(
                 prompt=prompt,
                 system_prompt="你是专业的网文主编，擅长设计吸引人的小说设定。",
                 temperature=0.8,
                 max_tokens=2048,
             )
-            
+
             # 提取 JSON
             json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
             if json_match:
@@ -375,11 +376,12 @@ class InitProject:
 
         # 收集用户输入后，用 AI 补全空字段
         console.print("\n[yellow]⏳ 正在让 AI 补全未填写的设定...[/yellow]")
-        info = self._ai_fill_missing_fields(title, genre, info)
+        import asyncio
+        info = asyncio.run(self._ai_fill_missing_fields(title, genre, info))
 
         return info
 
-    def _ai_fill_missing_fields(self, title: str, genre: str, info: Dict[str, Any]) -> Dict[str, Any]:
+    async def _ai_fill_missing_fields(self, title: str, genre: str, info: Dict[str, Any]) -> Dict[str, Any]:
         """用 AI 补全用户未填写的空字段"""
         # 找出空字段
         empty_fields = {k: v for k, v in info.items() if not v}
@@ -429,7 +431,7 @@ class InitProject:
 4. 只输出 JSON，不要有任何解释。
 """
         try:
-            response = self.llm.generate(
+            response = await self.llm.generate(
                 prompt=prompt,
                 system_prompt="你是专业的网文主编，擅长设计吸引人的小说设定。",
                 temperature=0.8,
