@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novel-writer"
+version = "0.1.0"
+description = "模型无关的网文写作系统，支持千问、Ollama 等多种 LLM 后端"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "NovelWriter Contributors"}
+]
+keywords = ["novel", "writing", "llm", "qwen", "ollama", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "sqlite-utils>=3.0.0",
+    "rich>=13.0.0",
+    "tenacity>=8.0.0",
+    "filelock>=3.0.0",
+    "rank-bm25>=0.2.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "watchdog>=3.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.3.0",
+]
+
+[project.scripts]
+novel-writer = "src.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
