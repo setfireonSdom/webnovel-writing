@@ -14,8 +14,6 @@
 
 - [🚀 快速开始](#快速开始)
 - [📖 完整使用流程](#完整使用流程)
-  - [第 0 步：检查环境](#第-0-步检查环境可选)
-  - [第 1 步：初始化项目](#第-1-步初始化项目)
 - [🔧 命令参考](#命令参考)
 - [⚙️ 配置](#配置)
 - [📁 文件结构](#文件结构)
@@ -83,16 +81,6 @@ novel-writer write --chapter 1 --mode standard
 
 下面是从零到写完一本小说的**每一步操作**，按顺序走就行。
 
-### 第 0 步：检查环境（可选）
-
-开始前检查 .env、config.yaml、API Key 是否配置正确：
-
-```bash
-novel-writer preflight
-```
-
-如果一切 OK，就可以开始创建项目了。如果某个配置缺失，会提示你。
-
 ### 第 1 步：初始化项目
 
 **目的**：创建项目目录结构、生成 `state.json`（核心状态文件）、写入设定集。
@@ -105,8 +93,6 @@ novel-writer init --title "我的小说" --genre "都市神豪" --auto
 
 # 方式二：半自动（你填部分设定，AI 补全其余）
 novel-writer init --title "我的小说" --genre "都市神豪"
-# 系统会逐一询问你各个设定，你可以填写也可以直接回车跳过
-# 你填了的字段会原样保留，你跳过的字段由 AI 自动补全
 ```
 ![alt text](image-1.png)
 
@@ -354,7 +340,7 @@ novel-writer dashboard --reload     # 开发热重载
 | 命令 | 说明 | 必需参数 | 可选参数 | 示例 |
 |------|------|---------|---------|------|
 | `init` | 创建新项目 | `--title`, `--genre` | `--auto` | `novel-writer init --title "书名" --genre "都市" --auto` |
-| `preflight` | 检查环境是否就绪 | 无 | 无 | `novel-writer preflight`（需在项目目录内运行） |
+| `preflight` | 检查环境是否就绪 | 无 | 无 | `novel-writer preflight` |
 | `plan` | 生成章节细纲 | `--volume`, `--chapters` | `--auto`, `--batch-size` | `novel-writer plan --volume 1 --chapters 50 --auto --batch-size 5` |
 | `check-outline` | 检查并优化细纲 | `--volume` | 无 | `novel-writer check-outline --volume 1` |
 | `write` | 写作章节 | `--chapter` 或 `--start`+`--end` | `--mode` | `novel-writer write --chapter 1 --mode standard` |
@@ -394,6 +380,8 @@ NOVEL_LLM_MAX_TOKENS=4096
 NOVEL_WORKFLOW_MODE=standard       # standard | fast | minimal
 NOVEL_REVIEW_DEPTH=core            # core | full
 ```
+
+> 不确定环境是否就绪？运行 `novel-writer preflight` 检查。
 
 ### config.yaml（可选）
 

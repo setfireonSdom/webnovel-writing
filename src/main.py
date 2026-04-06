@@ -126,7 +126,7 @@ def main():
     config = load_config(args.config)
     
     # 解析项目根目录
-    if args.command != "init":
+    if args.command not in ("init", "preflight"):
         try:
             project_root = args.project_root or resolve_project_root()
             config["project_root"] = project_root
